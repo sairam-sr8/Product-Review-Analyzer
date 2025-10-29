@@ -1,0 +1,21 @@
+# Product Review Analyzer - Python Dependencies
+
+# Core NLP Libraries
+pandas>=2.2.0
+numpy>=1.26.0
+matplotlib>=3.8.0
+seaborn>=0.13.0
+plotly>=5.18.0
+
+# NLP Processing
+nltk>=3.8.0
+wordcloud>=1.9.0
+
+# AI & ML
+google-generativeai>=0.3.2
+
+# Environment Variables
+python-dotenv>=1.0.0
+
+# Web Framework
+streamlit>=1.28.0
