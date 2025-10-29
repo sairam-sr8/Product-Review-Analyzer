@@ -34,9 +34,16 @@ pip install -r requirements.txt
 
 ### 3. Set Up Gemini API Key
 
+**For Local Development:**
 Create a `.env` file in the project root:
 ```bash
 GEMINI_API_KEY=your_gemini_api_key_here
+```
+
+**For Streamlit Cloud Deployment:**
+Add secret in app settings (Settings → Secrets):
+```toml
+GEMINI_API_KEY = "your_gemini_api_key_here"
 ```
 
 Get your API key from: [Google AI Studio](https://makersuite.google.com/app/apikey)

@@ -8,7 +8,15 @@ import google.generativeai as genai
 from typing import List, Dict, Optional
 from dotenv import load_dotenv
 
-# Load environment variables
+# Try to import streamlit for secrets (only if in Streamlit environment)
+try:
+    import streamlit as st
+    STREAMLIT_AVAILABLE = True
+except ImportError:
+    STREAMLIT_AVAILABLE = False
+    st = None
+
+# Load environment variables (for local development)
 load_dotenv()
 
 
@@ -20,15 +28,34 @@ class GeminiService:
         Initialize Gemini Service
         
         Args:
-            api_key: Gemini API key. If None, reads from GEMINI_API_KEY env var
+            api_key: Gemini API key. If None, reads from Streamlit secrets or GEMINI_API_KEY env var
         """
-        self.api_key = api_key or os.getenv('GEMINI_API_KEY')
+        # Priority: 1) Provided key, 2) Streamlit secrets, 3) Environment variable
+        if api_key:
+            self.api_key = api_key
+        elif STREAMLIT_AVAILABLE and st:
+            # Try Streamlit secrets first (for Streamlit Cloud)
+            try:
+                if hasattr(st, 'secrets') and 'GEMINI_API_KEY' in st.secrets:
+                    self.api_key = st.secrets['GEMINI_API_KEY']
+                else:
+                    self.api_key = os.getenv('GEMINI_API_KEY')
+            except:
+                self.api_key = os.getenv('GEMINI_API_KEY')
+        else:
+            self.api_key = os.getenv('GEMINI_API_KEY')
         
         if not self.api_key:
-            raise ValueError(
-                "Gemini API key not found! "
-                "Please set GEMINI_API_KEY in .env file or pass it as argument."
+            error_msg = (
+                "Gemini API key not found!\n\n"
+                "For LOCAL development: Create .env file with GEMINI_API_KEY=your_key\n"
+                "For STREAMLIT CLOUD: Add secret in app settings:\n"
+                "  1. Go to your app on share.streamlit.io\n"
+                "  2. Click Settings → Secrets\n"
+                "  3. Add: GEMINI_API_KEY = 'your_key'\n"
+                "  4. Save and restart"
             )
+            raise ValueError(error_msg)
         
         # Configure Gemini
         genai.configure(api_key=self.api_key)

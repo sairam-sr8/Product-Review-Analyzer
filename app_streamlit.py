@@ -30,19 +30,62 @@ from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from nltk.stem import WordNetLemmatizer
 
-# Download NLTK data
-try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt', quiet=True)
-try:
-    nltk.data.find('corpora/stopwords')
-except LookupError:
-    nltk.download('stopwords', quiet=True)
-try:
-    nltk.data.find('corpora/wordnet')
-except LookupError:
-    nltk.download('wordnet', quiet=True)
+# Download NLTK data - Required for tokenization
+def ensure_nltk_data():
+    """Ensure all required NLTK data is downloaded"""
+    import os
+    
+    # Set NLTK data path (important for Streamlit Cloud)
+    nltk_data_dir = os.path.join(os.path.expanduser("~"), "nltk_data")
+    os.makedirs(nltk_data_dir, exist_ok=True)
+    nltk.data.path.append(nltk_data_dir)
+    
+    required_data = [
+        ('punkt', 'punkt'),  # Download punkt first (includes punkt_tab in newer versions)
+        ('stopwords', 'stopwords'),
+        ('wordnet', 'wordnet'),
+        ('averaged_perceptron_tagger', 'averaged_perceptron_tagger')
+    ]
+    
+    for resource_name, download_name in required_data:
+        try:
+            # Try to find the resource
+            try:
+                nltk.data.find(f'tokenizers/{resource_name}')
+            except LookupError:
+                try:
+                    nltk.data.find(f'corpora/{resource_name}')
+                except LookupError:
+                    try:
+                        nltk.data.find(f'taggers/{resource_name}')
+                    except LookupError:
+                        # Resource not found, try to download
+                        nltk.download(download_name, quiet=True)
+        except Exception as e:
+            # Continue if download fails - we'll handle it gracefully in the code
+            pass
+
+# Ensure NLTK data is available (with retry for Streamlit Cloud)
+@st.cache_resource
+def load_nltk_data():
+    """Cache the NLTK data loading"""
+    ensure_nltk_data()
+    return True
+
+# Load NLTK data at startup
+if 'nltk_loaded' not in st.session_state:
+    try:
+        load_nltk_data()
+        st.session_state.nltk_loaded = True
+    except Exception as e:
+        st.session_state.nltk_loaded = False
+        # Try again without cache
+        try:
+            ensure_nltk_data()
+            st.session_state.nltk_loaded = True
+        except:
+            st.session_state.nltk_loaded = False
+            # App will still work with fallback tokenization
 
 # Page config
 st.set_page_config(
@@ -96,8 +139,22 @@ st.markdown("""
 # Initialize session state
 if 'gemini_service' not in st.session_state:
     try:
-        st.session_state.gemini_service = get_gemini_service()
+        # Try to get API key from Streamlit secrets (for deployment) or .env (for local)
+        api_key = None
+        if 'GEMINI_API_KEY' in st.secrets:
+            api_key = st.secrets['GEMINI_API_KEY']
+        
+        st.session_state.gemini_service = get_gemini_service(api_key)
         st.session_state.gemini_available = True
+    except KeyError:
+        # No secret found - try .env file
+        try:
+            st.session_state.gemini_service = get_gemini_service()
+            st.session_state.gemini_available = True
+        except Exception as e:
+            st.session_state.gemini_service = None
+            st.session_state.gemini_available = False
+            st.session_state.gemini_error = "Gemini API key not found! Please set GEMINI_API_KEY in Streamlit secrets (for deployment) or .env file (for local)."
     except Exception as e:
         st.session_state.gemini_service = None
         st.session_state.gemini_available = False
@@ -120,19 +177,61 @@ def clean_text(text):
     text = re.sub(r'\s+', ' ', text).strip()
     return text
 
-lemmatizer = WordNetLemmatizer()
-stop_words = set(stopwords.words('english'))
+# Initialize NLP tools with error handling
+try:
+    lemmatizer = WordNetLemmatizer()
+except:
+    # Fallback if WordNet not available
+    class SimpleLemmatizer:
+        def lemmatize(self, word):
+            return word.lower()
+    lemmatizer = SimpleLemmatizer()
+
+try:
+    stop_words = set(stopwords.words('english'))
+except:
+    # Basic English stopwords if NLTK data not available
+    stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'as', 'is', 'was', 'were', 'been', 'be', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'should', 'could', 'may', 'might', 'must', 'can', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they'}
 
 def preprocess_text(text):
-    """Advanced text preprocessing"""
+    """Advanced text preprocessing with fallback if NLTK data unavailable"""
     if not text:
         return ""
-    tokens = word_tokenize(text)
-    processed = [
-        lemmatizer.lemmatize(token) 
-        for token in tokens 
-        if token not in stop_words and len(token) > 2
-    ]
+    
+    # Try to tokenize with NLTK
+    tokens = None
+    try:
+        tokens = word_tokenize(text)
+    except LookupError:
+        # NLTK data not available - try to download
+        try:
+            ensure_nltk_data()
+            tokens = word_tokenize(text)
+        except:
+            # If download fails, use simple tokenization
+            import re
+            tokens = re.findall(r'\b\w+\b', text.lower())
+    
+    if not tokens:
+        return ""
+    
+    # Process tokens with lemmatization and stopword removal
+    processed = []
+    try:
+        for token in tokens:
+            if len(token) > 2:
+                try:
+                    lemmatized = lemmatizer.lemmatize(token.lower())
+                    if lemmatized not in stop_words:
+                        processed.append(lemmatized)
+                except:
+                    # If lemmatization fails, just check stopwords
+                    if token.lower() not in stop_words:
+                        processed.append(token.lower())
+    except:
+        # Final fallback - just remove short tokens
+        processed = [t.lower() for t in tokens if len(t) > 2]
+    
     return ' '.join(processed)
 
 # Load dataset function

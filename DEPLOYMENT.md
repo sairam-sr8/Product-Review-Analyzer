@@ -29,14 +29,23 @@
    - **Main file**: `app_streamlit.py`
 5. Click **"Deploy"**
 
-### Step 3: Add Secrets (API Keys)
+### Step 3: Add Secrets (API Keys) - ⚠️ REQUIRED!
 
 1. In Streamlit Cloud dashboard, go to **"Settings"** → **"Secrets"**
-2. Add your Gemini API key:
+2. You'll see a text area - add this **exact format**:
    ```toml
-   GEMINI_API_KEY = "your_actual_api_key_here"
+   GEMINI_API_KEY = "AIzaSyDoJFyRrDpBz1km9h5pbvugOAUY-lWYYX4"
    ```
-3. Save and the app will restart automatically
+   **Important:**
+   - Use TOML format (not JSON)
+   - No quotes around key name
+   - Quotes around the value
+   - Replace with YOUR actual API key
+3. Click **"Save"** at the bottom
+4. The app will automatically restart
+5. You should see: ✅ **Gemini API: Connected**
+
+**If you see an error, the secret wasn't added correctly!**
 
 ### Step 4: Optional - Add Dataset
 
