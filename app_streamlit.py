@@ -38,54 +38,74 @@ def ensure_nltk_data():
     # Set NLTK data path (important for Streamlit Cloud)
     nltk_data_dir = os.path.join(os.path.expanduser("~"), "nltk_data")
     os.makedirs(nltk_data_dir, exist_ok=True)
-    nltk.data.path.append(nltk_data_dir)
+    if nltk_data_dir not in nltk.data.path:
+        nltk.data.path.append(nltk_data_dir)
     
-    required_data = [
-        ('punkt', 'punkt'),  # Download punkt first (includes punkt_tab in newer versions)
-        ('stopwords', 'stopwords'),
-        ('wordnet', 'wordnet'),
-        ('averaged_perceptron_tagger', 'averaged_perceptron_tagger')
+    # Required downloads - specifically include punkt_tab for NLTK 3.9+
+    required_downloads = [
+        'punkt',
+        'punkt_tab',  # Required for NLTK 3.9+
+        'stopwords',
+        'wordnet',
+        'averaged_perceptron_tagger'
     ]
     
-    for resource_name, download_name in required_data:
+    for download_name in required_downloads:
         try:
-            # Try to find the resource
-            try:
-                nltk.data.find(f'tokenizers/{resource_name}')
-            except LookupError:
+            # Check if already downloaded
+            if download_name == 'punkt_tab':
                 try:
-                    nltk.data.find(f'corpora/{resource_name}')
+                    nltk.data.find(f'tokenizers/punkt_tab/english')
+                    continue  # Already exists
                 except LookupError:
-                    try:
-                        nltk.data.find(f'taggers/{resource_name}')
-                    except LookupError:
-                        # Resource not found, try to download
-                        nltk.download(download_name, quiet=True)
+                    pass
+            elif download_name == 'punkt':
+                try:
+                    nltk.data.find(f'tokenizers/punkt')
+                    continue  # Already exists
+                except LookupError:
+                    pass
+            elif download_name == 'stopwords':
+                try:
+                    nltk.data.find(f'corpora/stopwords')
+                    continue
+                except LookupError:
+                    pass
+            elif download_name == 'wordnet':
+                try:
+                    nltk.data.find(f'corpora/wordnet')
+                    continue
+                except LookupError:
+                    pass
+            elif download_name == 'averaged_perceptron_tagger':
+                try:
+                    nltk.data.find(f'taggers/averaged_perceptron_tagger')
+                    continue
+                except LookupError:
+                    pass
+            
+            # Download if not found
+            nltk.download(download_name, quiet=True)
         except Exception as e:
             # Continue if download fails - we'll handle it gracefully in the code
             pass
 
-# Ensure NLTK data is available (with retry for Streamlit Cloud)
-@st.cache_resource
-def load_nltk_data():
-    """Cache the NLTK data loading"""
+# Ensure NLTK data is available at startup (BEFORE page config)
+# This must run synchronously, not cached, to ensure data is ready
+try:
     ensure_nltk_data()
-    return True
-
-# Load NLTK data at startup
-if 'nltk_loaded' not in st.session_state:
+    # Verify punkt_tab specifically exists
     try:
-        load_nltk_data()
-        st.session_state.nltk_loaded = True
-    except Exception as e:
-        st.session_state.nltk_loaded = False
-        # Try again without cache
+        nltk.data.find('tokenizers/punkt_tab/english')
+    except LookupError:
+        # If punkt_tab not found, try downloading it explicitly
         try:
-            ensure_nltk_data()
-            st.session_state.nltk_loaded = True
+            nltk.download('punkt_tab', quiet=True)
         except:
-            st.session_state.nltk_loaded = False
-            # App will still work with fallback tokenization
+            pass
+except Exception as e:
+    # If download fails at startup, app will use fallback tokenization
+    pass
 
 # Page config
 st.set_page_config(
